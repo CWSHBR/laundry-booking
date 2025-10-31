@@ -61,11 +61,46 @@ class LaundryBot(
         }
     }
 
+    private fun cancelKb(flow: String): InlineKeyboardMarkup {
+        val kb = InlineKeyboardMarkup()
+        kb.keyboard = listOf(listOf(button("Отмена", "CANCEL:$flow")))
+        return kb
+    }
+
     private fun handleMessage(update: Update) {
         val msg = update.message
         val chatId = msg.chatId
         val tgId = msg.from.id
         val text = msg.text.trim()
+        val lower = text.lowercase()
+
+        // Обработка команды Отмена для текстовых состояний
+        if (lower == "отмена" || lower == "/cancel" || lower == "cancel") {
+            when {
+                pendingAddAdmin.remove(tgId) == true -> {
+                    sendMessage(chatId, "Действие отменено", null)
+                    showAdminMenu(chatId, tgId)
+                    return
+                }
+                pendingAddMachineName.remove(tgId) == true || pendingAddMachineOpenHour.containsKey(tgId) -> {
+                    pendingAddMachineOpenHour.remove(tgId)
+                    sendMessage(chatId, "Добавление машины отменено", null)
+                    showMachines(chatId, messageId = null, forAdmin = true, viewerTgId = null)
+                    return
+                }
+                pendingAdminAssignBooking.containsKey(tgId) -> {
+                    val (mId, d, _) = pendingAdminAssignBooking.remove(tgId)!!
+                    sendMessage(chatId, "Назначение брони отменено", null)
+                    showDay(mId, d, chatId, messageId = null, forAdmin = true, viewerTgId = null)
+                    return
+                }
+                pendingRegistration.remove(tgId) == true -> {
+                    sendMessage(chatId, "Регистрация отменена", null)
+                    showMainMenu(chatId, tgId)
+                    return
+                }
+            }
+        }
 
         // Состояния ввода
         when {
@@ -87,7 +122,7 @@ class LaundryBot(
             pendingAddAdmin.remove(tgId) == true -> {
                 val id = text.toLongOrNull()
                 if (id == null) {
-                    sendMessage(chatId, "Введите числовой Telegram ID")
+                    sendMessage(chatId, "Введите числовой Telegram ID", cancelKb("ADD_ADMIN"))
                     pendingAddAdmin[tgId] = true
                     return
                 }
@@ -99,7 +134,7 @@ class LaundryBot(
             pendingAddMachineName.remove(tgId) == true -> {
                 val name = text.take(64)
                 pendingAddMachineOpenHour[tgId] = name to null
-                sendMessage(chatId, "Укажите час открытия (0-23)")
+                sendMessage(chatId, "Укажите час открытия (0-23)", cancelKb("ADD_MACHINE"))
                 return
             }
             pendingAddMachineOpenHour[tgId] != null -> {
@@ -107,15 +142,15 @@ class LaundryBot(
                 val hour = text.toIntOrNull()
                 if (open == null) {
                     if (hour == null || hour !in 0..23) {
-                        sendMessage(chatId, "Час открытия должен быть числом 0-23")
+                        sendMessage(chatId, "Час открытия должен быть числом 0-23", cancelKb("ADD_MACHINE"))
                         return
                     }
                     pendingAddMachineOpenHour[tgId] = name to hour
-                    sendMessage(chatId, "Укажите час закрытия (1-24)")
+                    sendMessage(chatId, "Укажите час закрытия (1-24)", cancelKb("ADD_MACHINE"))
                     return
                 } else {
                     if (hour == null || hour !in 1..24 || hour <= open) {
-                        sendMessage(chatId, "Час закрытия должен быть в диапазоне 1-24 и больше часа открытия")
+                        sendMessage(chatId, "Час закрытия должен быть в диапазоне 1-24 и больше часа открытия", cancelKb("ADD_MACHINE"))
                         return
                     }
                     services.addMachine(name, open, hour)
@@ -129,13 +164,13 @@ class LaundryBot(
                 val (machineId, date, hour) = pendingAdminAssignBooking.remove(tgId)!!
                 val targetTgId = text.toLongOrNull()
                 if (targetTgId == null) {
-                    sendMessage(chatId, "Введите числовой Telegram ID пользователя")
+                    sendMessage(chatId, "Введите числовой Telegram ID пользователя", cancelKb("ASSIGN"))
                     pendingAdminAssignBooking[tgId] = Triple(machineId, date, hour)
                     return
                 }
                 val user = services.getUserByTelegramId(targetTgId)
                 if (user == null) {
-                    sendMessage(chatId, "Пользователь с таким Telegram ID не найден или не зарегистрирован")
+                    sendMessage(chatId, "Пользователь с таким Telegram ID не найден или не зарегистрирован", cancelKb("ASSIGN"))
                     pendingAdminAssignBooking[tgId] = Triple(machineId, date, hour)
                     return
                 }
@@ -266,7 +301,7 @@ class LaundryBot(
             data == "A:ADD_MACHINE" -> {
                 ack()
                 if (!services.isAdmin(tgId)) return
-                sendMessage(chatId, "Введите название машины")
+                sendMessage(chatId, "Введите название машины или отправьте Отмена", cancelKb("ADD_MACHINE"))
                 pendingAddMachineName[tgId] = true
             }
             data.startsWith("A:M:") -> {
@@ -308,7 +343,7 @@ class LaundryBot(
                     return
                 }
                 pendingAdminAssignBooking[tgId] = Triple(machineId, date, hour)
-                sendMessage(chatId, "Введите Telegram ID пользователя, для которого создать запись")
+                sendMessage(chatId, "Введите Telegram ID пользователя, для которого создать запись", cancelKb("ASSIGN"))
             }
             data == "A:ADMINS" -> {
                 ack()
@@ -325,8 +360,39 @@ class LaundryBot(
             data == "A:ADD_ADMIN" -> {
                 ack()
                 if (!services.isAdmin(tgId)) return
-                sendMessage(chatId, "Укажите Telegram ID нового администратора")
+                sendMessage(chatId, "Укажите Telegram ID нового администратора", cancelKb("ADD_ADMIN"))
                 pendingAddAdmin[tgId] = true
+            }
+            data.startsWith("CANCEL:") -> {
+                ack()
+                val flow = data.substringAfter("CANCEL:")
+                when (flow) {
+                    "ADD_ADMIN" -> {
+                        pendingAddAdmin.remove(tgId)
+                        sendMessage(chatId, "Действие отменено")
+                        showAdminMenu(chatId, tgId)
+                    }
+                    "ADD_MACHINE" -> {
+                        pendingAddMachineName.remove(tgId)
+                        pendingAddMachineOpenHour.remove(tgId)
+                        sendMessage(chatId, "Добавление машины отменено")
+                        showMachines(chatId, messageId = null, forAdmin = true, viewerTgId = null)
+                    }
+                    "ASSIGN" -> {
+                        val triple = pendingAdminAssignBooking.remove(tgId)
+                        if (triple != null) {
+                            val (machineId, date, _) = triple
+                            sendMessage(chatId, "Назначение брони отменено")
+                            showDay(machineId, date, chatId, messageId = null, forAdmin = true, viewerTgId = null)
+                        } else {
+                            showAdminMenu(chatId, tgId)
+                        }
+                    }
+                    else -> {
+                        // неизвестный поток — вернёмся в меню
+                        showMainMenu(chatId, tgId)
+                    }
+                }
             }
         }
     }
@@ -437,13 +503,13 @@ class LaundryBot(
                 else -> "U:B:$machineId:$clampedDate:$h"
             }
             val text = when {
-                forAdmin && isBooked -> "❌ $h"
-                forAdmin && !isBooked -> "✅ $h"
+                forAdmin && isBooked -> "❌ $h:00"
+                forAdmin && !isBooked -> "🟢 $h:00"
                 !forAdmin && isBooked -> {
                     val ownerId = byHour[h]?.userId
-                    if (ownerId != null && ownerId == currentUserId) "🗑 $h" else "🔒 $h"
+                    if (ownerId != null && ownerId == currentUserId) "✅ $h:00" else "⭕️ $h:00"
                 }
-                else -> "✅ $h"
+                else -> "🟢️ $h:00"
             }
             hourButtons.add(button(text, callback))
             if (hourButtons.size == 4) {
@@ -461,8 +527,8 @@ class LaundryBot(
         val info = buildString {
             appendLine("Машина: ${machine.name}")
             appendLine("Дата: $clampedDate")
-            if (forAdmin) appendLine("❌ — удалить запись, ✅ — назначить пользователя")
-            else appendLine("✅ — свободно, 🔒 — занято, 🗑 — отменить свою бронь")
+            if (forAdmin) appendLine("❌ — удалить запись, 🟢 — создать запись для пользователя")
+            else appendLine("🟢️ — свободно, ⭕️ — занято, ✅ — отменить свою бронь")
         }.trim()
         editOrSend(chatId, messageId, info, kb)
     }
