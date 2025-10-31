@@ -60,4 +60,7 @@ class Services(
         bookings.insert(userId, machineId, date, hour, now)
 
     fun deleteBooking(machineId: Long, date: LocalDate, hour: Int): Int = bookings.delete(machineId, date, hour)
+
+    fun listUserBookingsFromDate(userId: Long, fromDateInclusive: LocalDate) =
+        bookings.listUserBookingsFromDate(userId, fromDateInclusive)
 }

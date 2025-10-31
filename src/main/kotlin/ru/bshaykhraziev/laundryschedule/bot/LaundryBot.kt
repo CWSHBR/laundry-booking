@@ -231,7 +231,29 @@ class LaundryBot(
             rows.add(listOf(button("Админ-меню", "A:MENU")))
         }
         kb.keyboard = rows
-        editOrSend(chatId, messageId, "Главное меню", kb)
+
+        val user = services.getUserByTelegramId(tgId)
+        val bookingsText = if (user != null) {
+            val bookings = services.listUserBookingsFromDate(user.id, today)
+            if (bookings.isEmpty()) "Записей нет" else buildString {
+                appendLine("Ваши ближайшие записи:")
+                bookings.forEach { b ->
+                    val machineName = services.getMachine(b.machineId)?.name ?: "Машина ${b.machineId}"
+                    val hh = String.format("%02d:00", b.hour)
+                    appendLine("${b.date} $hh — $machineName")
+                }
+            }.trim()
+        } else null
+
+        val text = buildString {
+            appendLine("Главное меню")
+            if (bookingsText != null) {
+                appendLine()
+                append(bookingsText)
+            }
+        }.trim()
+
+        editOrSend(chatId, messageId, text, kb)
     }
 
     private fun handleCallback(update: Update) {

@@ -75,6 +75,31 @@ class BookingsRepository(private val db: Database) {
         }
     }
 
+    fun listUserBookingsFromDate(userId: Long, fromDateInclusive: LocalDate): List<Booking> = db.getConnection().use { conn ->
+        conn.prepareStatement(
+            "SELECT id, user_id, machine_id, date, hour, created_at FROM bookings WHERE user_id = ? AND date >= ? ORDER BY date ASC, hour ASC"
+        ).use { ps ->
+            ps.setLong(1, userId)
+            ps.setString(2, fromDateInclusive.toString())
+            ps.executeQuery().use { rs ->
+                val list = mutableListOf<Booking>()
+                while (rs.next()) {
+                    list.add(
+                        Booking(
+                            id = rs.getLong("id"),
+                            userId = rs.getLong("user_id"),
+                            machineId = rs.getLong("machine_id"),
+                            date = LocalDate.parse(rs.getString("date")),
+                            hour = rs.getInt("hour"),
+                            createdAt = rs.getLong("created_at")
+                        )
+                    )
+                }
+                list
+            }
+        }
+    }
+
     fun insert(userId: Long, machineId: Long, date: LocalDate, hour: Int, createdAt: Long): Booking = db.getConnection().use { conn ->
         conn.prepareStatement(
             "INSERT INTO bookings(user_id, machine_id, date, hour, created_at) VALUES (?, ?, ?, ?, ?)",
