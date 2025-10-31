@@ -1,0 +1,18 @@
+# VCS / IDE
+.git
+.gitignore
+.idea
+*.iml
+
+# Gradle caches and build outputs
+.gradle
+build/
+out/
+
+# Local data
+laundry.db
+**/*.db
+
+# Docker files
+Dockerfile
+
