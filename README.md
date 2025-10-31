@@ -49,6 +49,58 @@ export PRIMARY_ADMIN_ID="123456789"
 
 По умолчанию БД будет в файле `laundry.db` в текущей директории.
 
+## Запуск в Docker
+
+В репозитории есть Dockerfile с multi-stage сборкой. БД хранится на хосте благодаря маунту каталога `/data`.
+
+1) Сборка образа:
+
+```zsh
+docker build -t laundry-schedule:latest .
+```
+
+2) Подготовьте каталог на сервере для БД, например:
+
+```zsh
+mkdir -p /srv/laundry-data
+```
+
+3) Запуск контейнера (замените значения переменных на ваши):
+
+```zsh
+docker run -d \
+  --name laundry-bot \
+  --restart unless-stopped \
+  -e BOT_TOKEN="123456:ABC-DEF..." \
+  -e PRIMARY_ADMIN_ID="123456789" \
+  -v /srv/laundry-data:/data \
+  laundry-schedule:latest
+```
+
+- Приложение использует `jdbc:sqlite:laundry.db` и рабочую директорию `/data`, поэтому файл БД будет находиться на хосте по пути `/srv/laundry-data/laundry.db`.
+- Для обновления образа перезапустите контейнер, данные сохранятся в смонтированном томе.
+
+Опционально: docker-compose.yml
+
+```yaml
+services:
+  laundry-bot:
+    image: laundry-schedule:latest
+    container_name: laundry-bot
+    restart: unless-stopped
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - PRIMARY_ADMIN_ID=${PRIMARY_ADMIN_ID}
+    volumes:
+      - /srv/laundry-data:/data
+```
+
+Запуск:
+
+```zsh
+docker compose up -d
+```
+
 ## Как пользоваться
 
 - Пользователь:
@@ -80,4 +132,3 @@ export PRIMARY_ADMIN_ID="123456789"
 - Ошибка при запуске: "Env BOT_TOKEN ... не задан" — установите переменные окружения `BOT_TOKEN` и `PRIMARY_ADMIN_ID`.
 - Если бот не отвечает — проверьте, что токен корректен и у процесса есть выход в интернет. Также убедитесь, что бот не запущен второй копией.
 - SQLite-файл блокируется на запись другим процессом — остановите вторую копию бота или закройте приложение, использующее `laundry.db`.
-
