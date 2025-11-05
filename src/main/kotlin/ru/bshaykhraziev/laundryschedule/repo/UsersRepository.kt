@@ -56,5 +56,19 @@ class UsersRepository(private val db: Database) {
             }
         }
     }
-}
 
+    fun getById(id: Long): User? = db.getConnection().use { conn ->
+        conn.prepareStatement("SELECT id, telegram_id, surname, room, registered_at FROM users WHERE id = ?").use { ps ->
+            ps.setLong(1, id)
+            ps.executeQuery().use { rs ->
+                if (rs.next()) User(
+                    id = rs.getLong("id"),
+                    telegramId = rs.getLong("telegram_id"),
+                    surname = rs.getString("surname"),
+                    room = rs.getString("room"),
+                    registeredAt = rs.getLong("registered_at")
+                ) else null
+            }
+        }
+    }
+}

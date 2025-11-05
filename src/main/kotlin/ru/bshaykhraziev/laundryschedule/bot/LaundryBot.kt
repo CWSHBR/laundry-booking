@@ -3,6 +3,7 @@ package ru.bshaykhraziev.laundryschedule.bot
 import org.slf4j.LoggerFactory
 import org.telegram.telegrambots.bots.TelegramLongPollingBot
 import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery
+import org.telegram.telegrambots.meta.api.methods.ParseMode
 import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText
@@ -30,7 +31,7 @@ class LaundryBot(
     private val pendingAddMachineOpenHour = ConcurrentHashMap<Long, Pair<String, Int?>>() // name, open?
     private val pendingAdminAssignBooking = ConcurrentHashMap<Long, Triple<Long, LocalDate, Int>>() // machineId, date, hour
 
-    private val dateFmt: DateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE
+    private val dateFmt: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
 
     private val today: LocalDate get() = LocalDate.now()
     private val maxDate: LocalDate get() = today.plusDays(3)
@@ -175,7 +176,7 @@ class LaundryBot(
                     return
                 }
                 if (date.isBefore(today) || date.isAfter(maxDate)) {
-                    sendMessage(chatId, "Запись возможна только с ${today} по ${maxDate}")
+                    sendMessage(chatId, "Запись возможна только с ${today.format(dateFmt)} по ${maxDate.format(dateFmt)}")
                     return
                 }
                 if (!services.canUserBookForMachineOnDate(user.id, machineId, date)) {
@@ -183,7 +184,7 @@ class LaundryBot(
                     return
                 }
                 services.createBooking(user.id, machineId, date, hour, System.currentTimeMillis())
-                sendMessage(chatId, "Бронь создана для пользователя ${user.surname} (комн. ${user.room}) на $date $hour:00")
+                sendMessage(chatId, "Бронь создана для пользователя ${user.surname} (комн. ${user.room}) на ${date.format(dateFmt)} ${hour}:00")
                 return
             }
         }
@@ -240,7 +241,7 @@ class LaundryBot(
                 bookings.forEach { b ->
                     val machineName = services.getMachine(b.machineId)?.name ?: "Машина ${b.machineId}"
                     val hh = String.format("%02d:00", b.hour)
-                    appendLine("${b.date} $hh — $machineName")
+                    appendLine("${b.date.format(dateFmt)} $hh — $machineName")
                 }
             }.trim()
         } else null
@@ -291,7 +292,7 @@ class LaundryBot(
                 var date = LocalDate.parse(parts[3])
                 if (date.isBefore(today) || date.isAfter(maxDate)) {
                     date = date.coerceIn(today, maxDate)
-                    ack("Доступны даты с ${today} по ${maxDate}")
+                    ack("Доступны даты с ${today.format(dateFmt)} по ${maxDate.format(dateFmt)}")
                 }
                 showDay(machineId, date, chatId, cq.message.messageId, forAdmin = false, viewerTgId = tgId)
             }
@@ -338,7 +339,7 @@ class LaundryBot(
                 var date = LocalDate.parse(parts[3])
                 if (date.isBefore(today) || date.isAfter(maxDate)) {
                     date = date.coerceIn(today, maxDate)
-                    ack("Доступны даты с ${today} по ${maxDate}")
+                    ack("Доступны даты с ${today.format(dateFmt)} по ${maxDate.format(dateFmt)}")
                 }
                 showDay(machineId, date, chatId, cq.message.messageId, forAdmin = true, viewerTgId = null)
             }
@@ -361,7 +362,7 @@ class LaundryBot(
                 val hour = parts[4].toInt()
                 if (!services.isAdmin(tgId)) return
                 if (date.isBefore(today) || date.isAfter(maxDate)) {
-                    sendMessage(chatId, "Запись возможна только с ${today} по ${maxDate}")
+                    sendMessage(chatId, "Запись возможна только с ${today.format(dateFmt)} по ${maxDate.format(dateFmt)}")
                     return
                 }
                 pendingAdminAssignBooking[tgId] = Triple(machineId, date, hour)
@@ -426,7 +427,7 @@ class LaundryBot(
             return
         }
         if (date.isBefore(today) || date.isAfter(maxDate)) {
-            sendMessage(chatId, "Запись возможна только с ${today} по ${maxDate}")
+            sendMessage(chatId, "Запись возможна только с ${today.format(dateFmt)} по ${maxDate.format(dateFmt)}")
             return
         }
         val user = services.getUserByTelegramId(tgId) ?: return
@@ -445,7 +446,7 @@ class LaundryBot(
             return
         }
         services.createBooking(user.id, machineId, date, hour, System.currentTimeMillis())
-        sendMessage(chatId, "Бронирование создано: ${machine.name}, $date, ${hour}:00")
+        sendMessage(chatId, "Бронирование создано: ${machine.name}, ${date.format(dateFmt)}, ${hour}:00")
         showDay(machineId, date, chatId, messageId, forAdmin = false, viewerTgId = tgId)
     }
 
@@ -462,7 +463,7 @@ class LaundryBot(
             return
         }
         services.deleteBooking(machineId, date, hour)
-        sendMessage(chatId, "Ваша бронь на $date в ${hour}:00 отменена")
+        sendMessage(chatId, "Ваша бронь на ${date.format(dateFmt)} в ${hour}:00 отменена")
         showDay(machineId, date, chatId, messageId, forAdmin = false, viewerTgId = tgId)
     }
 
@@ -504,9 +505,9 @@ class LaundryBot(
         // Навигация по дням с ограничением сегодня..+3
         val prevDate = clampedDate.minusDays(1)
         val nextDate = clampedDate.plusDays(1)
-        val prevBtn = if (prevDate.isBefore(today)) button(" ", "noop") else button("◀ $prevDate", (if (forAdmin) "A:D:" else "U:D:") + "$machineId:$prevDate")
-        val head = button("${machine.name} | $clampedDate", "noop")
-        val nextBtn = if (nextDate.isAfter(maxDate)) button(" ", "noop") else button("$nextDate ▶", (if (forAdmin) "A:D:" else "U:D:") + "$machineId:$nextDate")
+        val prevBtn = if (prevDate.isBefore(today)) button(" ", "noop") else button("◀ ${prevDate.format(dateFmt)}", (if (forAdmin) "A:D:" else "U:D:") + "$machineId:$prevDate")
+        val head = button("${machine.name} | ${clampedDate.format(dateFmt)}", "noop")
+        val nextBtn = if (nextDate.isAfter(maxDate)) button(" ", "noop") else button("${nextDate.format(dateFmt)} ▶", (if (forAdmin) "A:D:" else "U:D:") + "$machineId:$nextDate")
         rows.add(listOf(prevBtn, head, nextBtn))
 
         // Часы: верхняя граница включительно, но не выше 23
@@ -529,12 +530,12 @@ class LaundryBot(
                 forAdmin && !isBooked -> "🟢 $h:00"
                 !forAdmin && isBooked -> {
                     val ownerId = byHour[h]?.userId
-                    if (ownerId != null && ownerId == currentUserId) "✅ $h:00" else "⭕️ $h:00"
+                    if (ownerId != null && ownerId == currentUserId) "🔵 $h:00" else "⭕️ $h:00"
                 }
                 else -> "🟢️ $h:00"
             }
             hourButtons.add(button(text, callback))
-            if (hourButtons.size == 4) {
+            if (hourButtons.size == 2) { // 2 столбца
                 rows.add(hourButtons.toList())
                 hourButtons.clear()
             }
@@ -546,11 +547,42 @@ class LaundryBot(
         rows.add(listOf(back))
 
         kb.keyboard = rows
+
+        // Текстовое представление расписания в 2 столбца
+        val lines = buildString {
+            val userCache = mutableMapOf<Long, ru.bshaykhraziev.laundryschedule.model.User>()
+
+            fun String.upToSize(size: Int) = this.padEnd(size, ' ')
+
+            fun ownerText(hour: Int): String {
+                val b = byHour[hour] ?: return "СВОБОДНО"
+                val u = userCache.getOrPut(b.userId) { services.getUserById(b.userId) ?: return "СВОБОДНО" }
+                return "${u.surname.take(10)} ${u.room}"
+            }
+            var h = machine.openHour
+            while (h <= endHour) {
+                val h1 = h
+                val left = String.format("`%02d:00 %s`", h1, ownerText(h1).upToSize(14))
+                val h2 = h + 1
+                val right = if (h2 <= endHour)
+                    String.format("`%02d:00 %s`", h2, ownerText(h2))
+                else ""
+
+                appendLine(listOf(left, right).filter { it.isNotEmpty() }.joinToString("  "))
+                h += 2
+            }
+        }.trim()
+
         val info = buildString {
             appendLine("Машина: ${machine.name}")
-            appendLine("Дата: $clampedDate")
+            appendLine("Дата: ${clampedDate.format(dateFmt)}")
+            appendLine("---")
+            if (lines.isNotEmpty()) {
+                appendLine(lines)
+            }
+            appendLine("---")
             if (forAdmin) appendLine("❌ — удалить запись, 🟢 — создать запись для пользователя")
-            else appendLine("🟢️ — свободно, ⭕️ — занято, ✅ — отменить свою бронь")
+            else appendLine("🟢️ — свободно, ⭕️ — занято, 🔵 — отменить свою бронь")
         }.trim()
         editOrSend(chatId, messageId, info, kb)
     }
@@ -571,13 +603,17 @@ class LaundryBot(
         .build()
 
     private fun sendMessage(chatId: Long, text: String, kb: InlineKeyboardMarkup? = null) {
-        val sm = SendMessage(chatId.toString(), text).apply { replyMarkup = kb }
+        val sm = SendMessage(chatId.toString(), text).apply {
+            replyMarkup = kb
+            parseMode = ParseMode.MARKDOWN
+        }
         runCatching { execute(sm) }
     }
 
     private fun editOrSend(chatId: Long, messageId: Int?, text: String, kb: InlineKeyboardMarkup) {
         if (messageId != null) {
             val edit = EditMessageText().apply {
+                this.parseMode = ParseMode.MARKDOWN
                 this.chatId = chatId.toString()
                 this.messageId = messageId
                 this.text = text

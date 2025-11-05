@@ -35,6 +35,8 @@ class Services(
 
     fun getUserByTelegramId(tgId: Long): User? = users.findByTelegramId(tgId)
 
+    fun getUserById(id: Long): User? = users.getById(id)
+
     // Admins
     fun isAdmin(tgId: Long): Boolean = admins.isAdmin(tgId)
 
