@@ -1,0 +1,18 @@
+name: deploy.yml
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Build and publish image to DOCKER HUB
+        run: |
+          docker login --username shaykhraziev2b --password ${{ secrets.DOCKER_TOKEN }} 
+          docker build . --tag shaykhraziev2b/laundry-schedule:latest
+          docker push shaykhraziev2b/laundry-schedule:latest
