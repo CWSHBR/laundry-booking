@@ -1,0 +1,10 @@
+services:
+  laundry-bot:
+    image: .
+    container_name: laundry-bot
+    restart: unless-stopped
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - PRIMARY_ADMIN_ID=${PRIMARY_ADMIN_ID}
+    volumes:
+      - /srv/laundry-data:/data

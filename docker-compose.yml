@@ -1,0 +1,17 @@
+services:
+  laundry-bot:
+    image: shaykhraziev2b/laundry-schedule:latest
+    container_name: laundry-bot
+    restart: unless-stopped
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - PRIMARY_ADMIN_ID=${PRIMARY_ADMIN_ID}
+    volumes:
+      - /srv/laundry-data:/data
+
+  watchtower:
+    image: containrrr/watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /root/.docker/config.json:/config.json
+    command: --interval 30
